@@ -24,7 +24,11 @@ Appends a new state to the character's state machine.
 @ Examples
 
 local StateMachine = require(Path)
+
 StateMachine:Initiate(Player.Character)
+
 StateMachine:AppendState(Player.Character, { Name = "Jumping", Type = "Boolean" })
+
 StateMachine:PushState(Player.Character, "Jumping", true)
+
 local IsJumping = StateMachine:CheckState(Player.Character, "Jumping")
