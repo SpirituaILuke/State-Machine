@@ -1,0 +1,130 @@
+-- @ SpirituaILuke 
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local IsClient = RunService:IsClient()
+local IsServer = RunService:IsServer()
+
+local Presets = require(script.Presets)
+
+-- < Utility Functions > --
+
+local function DeepCopy(tbl)
+	local copy = {}
+	for k, v in pairs(tbl) do
+		if type(k) == "table" then
+			k = DeepCopy(k)
+		end
+		if type(v) == "table" then
+			v = DeepCopy(v)
+		end
+		copy[k] = v
+	end
+	return copy
+end
+
+local function WarnInvalidPath(path)
+	warn(string.format("Requested path '%s' is invalid or of an incorrect type", tostring(path)))
+end
+
+-- < State Machine Implementation > --
+
+local StateMachine = {}
+
+function StateMachine:Initiate(Character)
+	local InitialState = {
+		InitiatedTime = os.clock(),
+		StateData = DeepCopy(Presets)
+	}
+	self[Character] = InitialState
+	return InitialState
+end
+
+function StateMachine:Remove(Character)
+	if not self[Character] then
+		warn(string.format("[Remove]: %s does not exist in the StateMachine", tostring(Character)))
+		return
+	end
+	self[Character] = nil
+end
+
+function StateMachine:ReturnData(Character, Path)
+	local State = self[Character]
+	if not State then
+		WarnInvalidPath(Character)
+		return nil
+	end
+	return State.StateData[Path] or WarnInvalidPath(Path)
+end
+
+function StateMachine:PushState(Character, Path, NewValue, ExtraInfo)
+	local Branch = self:ReturnData(Character, Path)
+	if not Branch then 
+		return warn(`[PushState]: Failed due to ReturnData failure.`)
+	end
+
+	Branch.StartTime = os.clock()
+	Branch.Duration = Branch.Type:match("Integer") and NewValue or 0
+
+	if ExtraInfo then
+		for key, value in pairs(ExtraInfo) do
+			Branch[key] = value
+		end
+	end
+
+	if Branch.Type == "Boolean" then
+		Branch["Is" .. Path] = NewValue
+	end
+end
+
+function StateMachine:CheckState(character, path)
+	local Branch = self:ReturnData(character, path)
+	if not Branch then 
+		return nil
+	end
+
+	local BranchCallback = {
+		NormalInteger = function(Branch) return os.clock() - Branch.StartTime >= Branch.Duration end,
+		SpecialInteger = function(Branch) return os.clock() - Branch.StartTime <= Branch.Duration end,
+		Boolean = function(Branch) return Branch["Is" .. path] end,
+	}
+
+	return BranchCallback[Branch.Type] and BranchCallback[Branch.Type](Branch) or nil
+end
+
+function StateMachine:AppendState(Character, StateData)
+	if not StateData.Type or not StateData.Name then
+		warn('Undefined StateData.Type or StateData.Name')
+		return
+	end
+
+	local StateAppend = {
+		StartTime = os.clock(),
+		Duration = 0,
+		["Is" .. StateData.Name] = false,
+		Type = StateData.Type,
+	}
+
+	self[Character].StateData[StateData.Name] = StateAppend
+end
+
+if IsClient then
+	local Player = Players.LocalPlayer
+	local Character = Player.Character or Player.CharacterAdded:Wait()
+	local CurrentState = StateMachine:Initiate(Character)
+
+	Player.CharacterAdded:Connect(function(char)
+		CurrentState = StateMachine:Initiate(char)
+	end)
+
+	Player.CharacterRemoving:Connect(function(char)
+		StateMachine:Remove(char); CurrentState = nil
+	end)
+
+	return StateMachine
+	
+elseif IsServer then
+	return StateMachine
+end
