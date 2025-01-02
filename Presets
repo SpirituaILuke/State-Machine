@@ -1,0 +1,12 @@
+return {
+	  --[[
+        ["Name"] = { -- < Preset Example > --
+            StartTime = os.clock(),
+            Duration = 0,
+            
+            ExtraData = {}
+            
+            Type = "NormalInteger" 
+    
+    ]]--
+}
